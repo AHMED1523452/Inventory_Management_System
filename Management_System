@@ -64,6 +64,7 @@ public class SigningUpController(IOptions<JwtOptions> jwt, ILogger<SigningUpCont
 
     [HttpGet]
     [Route("GettingProfileUsingPassword")]
+    [Authorize]
     public async Task<ActionResult> GettingProfile(AuthenticationRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.UserName) || string.IsNullOrWhiteSpace(request.Password))
@@ -108,6 +109,7 @@ public class ProductsController( ILogger<ProductsController> logger, Application
     
     [HttpGet]
     [Route("GetProduct/{id}")]
+    [Authorize(Roles = "User")]
     public async Task<ActionResult<int>> GetByID(int id) //.any API has parameter so has model binding 
     {
         var user = User.Identity.Name;//. getting User Name
@@ -124,6 +126,7 @@ public class ProductsController( ILogger<ProductsController> logger, Application
 
     [HttpGet]
     [Route("GetAllProducts")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<Products>>> GetAll()
     {
         var ExistingProducts = await context.Set<Products>().ToListAsync();
@@ -133,6 +136,7 @@ public class ProductsController( ILogger<ProductsController> logger, Application
     [HttpPost]
     [AllowAnonymous]
     [Route("AddProduct")]
+    [Authorize(Roles = "User")]
     public async Task<ActionResult<int>> AddNewProduct( Products products)
     {
         if(!ModelState.IsValid)
@@ -146,6 +150,8 @@ public class ProductsController( ILogger<ProductsController> logger, Application
 
     [HttpDelete]
     [Route("DeleteProduct")]
+    [Authorize(Roles = "User")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult> DeleteProductByID(int id )
     {
         var ExistingProducts = await context.Set<Products>().FindAsync(id);
@@ -190,6 +196,7 @@ public class CategoryController : ControllerBase
 
     [HttpGet]
     [Route("Get/id")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult> GetCategory(int id)
     {
         var ExistingCategory = await DbContext.Set<Category>().FindAsync(id);
@@ -202,6 +209,7 @@ public class CategoryController : ControllerBase
 
     [HttpDelete]
     [Route("DeleteCategory")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult> DeleteCategory(int id )
     {
         var ExistingCategory = await DbContext.Set<Category>().FindAsync(id);
@@ -216,6 +224,7 @@ public class CategoryController : ControllerBase
 
     [HttpPost]
     [Route("AddingProcess")]
+    [Authorize(Roles = "Admin")]
     //. this products will be added in Query string of URL 
     public async Task<ActionResult<int>> AddingCategory([FromQuery(Name = "cate2")]Category cat, Category category2)
     {
@@ -230,6 +239,7 @@ public class CategoryController : ControllerBase
 
     [HttpPut]
     [Route("Update")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult> UpdateCategory(int id, Category category )
     {
         var ExistingCategory = await DbContext.Set<Category>().FindAsync(id);
