@@ -49,6 +49,7 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
     
     [HttpPost]
     [Route("createUser")]
+    [CheckPermission(Permission.createUser)]
     [AllowAnonymous]
     public async Task<ActionResult<int>> SignUp(UsersInfo users)
     {
@@ -63,6 +64,7 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
     
     [HttpPost]
     [Route("RefreshToken")]
+    [CheckPermission(Permission.takeAccessToken)]
     [Authorize]
     public async Task<ActionResult> RefreshToken(UploadToken token)
     {
@@ -82,7 +84,7 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
 
     [HttpGet]
     [Route("{ID}")]
-    [AllowAnonymous]
+    [CheckPermission(Permission.readingUser)]
     public async Task<ActionResult> GetUser(int id)
     {
         var ExistingUser = await DbContext.Users.FindAsync( id);
@@ -96,7 +98,7 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
 
     [HttpPost]
     [Route("ChangePassword")]
-    [Authorize]
+    [CheckPermission(Permission.editingUser)]
     public async Task<ActionResult> ChangePassword([FromHeader]ChangePasswordRequest request)
     {
         var ExistingUsers = await DbContext.Users.SingleOrDefaultAsync(op => op.UserID == request.UserID);
@@ -116,7 +118,6 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
 
     [HttpDelete]
     [Route("DeleteAllTasks")]
-    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<TaskInfo>>> DeleteAll()
     {
         var ExistingTask = await DbContext.Task.ToListAsync();
@@ -149,8 +150,6 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
 
     [HttpGet]
     [Route("GetTask/{id}")]
-    [Authorize(Roles = "User")]
-    [Aut]
     public async Task<ActionResult<int>> GetByID(int ID )
     {
         var Existing = await DbContext.Task.FindAsync(ID);
