@@ -1,0 +1,188 @@
+[ApiController]
+[Route("[Controller]")]
+[Authorize]
+public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, ILogger<TodoList> logger) : ControllerBase
+{
+    public IOptions<JwtOptions> Jwt { get; } = jwt;
+    public ApplicationDbContext DbContext { get; } = dbContext;
+    public ILogger<TodoList> Logger { get; } = logger;
+
+    [HttpPost]
+    [Route("Login")]
+    [AllowAnonymous]
+    public async Task<ActionResult<string>> Login(AuthenticationRequest request)
+    {
+        Logger.LogCritical("There is something invalid in APi Login");//. will display in Console 
+        if (request == null || string.IsNullOrEmpty(request.UserName) || string.IsNullOrEmpty(request.Password))
+        {
+            return BadRequest("UserName or Password required");
+        }
+        var ExitingUsers = await DbContext.Users.SingleOrDefaultAsync(op => op.UserName == request.UserName && op.Password == request.Password);
+        if (ExitingUsers == null)
+            return Unauthorized("This data is not Exit");
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var tokenDescriptor = new SecurityTokenDescriptor()
+        {
+            Subject = new ClaimsIdentity(new Claim[] //.  this claim will carry info from the Users
+            {
+                new Claim(ClaimTypes.Name, request.UserName),
+            }),
+            Issuer = Jwt.Value.Issuer,
+            Audience = Jwt.Value.Audience,
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Jwt.Value.SigningKey)), SecurityAlgorithms.HmacSha256)
+        };
+        var SecurityToken = tokenHandler.CreateToken(tokenDescriptor);
+        var accessToken = tokenHandler.WriteToken(SecurityToken);//. Will arrive the Token and will put it in DataBase Called Upload Token 
+        var ExpirationDate = DateTime.UtcNow.AddDays(30); //. will add to the DateTime the Life Time that Exists in Json File
+        if (ExpirationDate > DateTime.MaxValue) //. Check if the Datatype arrived to the max Value or not
+            return BadRequest("The Date Is More Than the MaxValue of DateTime");
+        var token = new UploadToken() //. i did it due to i can't put it in Table The Access Token Direct
+        {
+            UserID = ExitingUsers.UserID,
+            AccessToken = accessToken,
+            ExpirationDate = ExpirationDate
+        };
+        var ExistingToken = await DbContext.Token.AddAsync(token);
+        await DbContext.SaveChangesAsync();
+        return Ok($"Access Token :`{accessToken}`");
+    }
+    
+    [HttpPost]
+    [Route("createUser")]
+    [AllowAnonymous]
+    public async Task<ActionResult<int>> SignUp(UsersInfo users)
+    {
+        var ExistingUser = await DbContext.Users.SingleOrDefaultAsync(op => op.UserName == users.UserName && op.Password == op.Password);
+        if (ExistingUser != null)
+            return BadRequest("data already Exist");
+        await DbContext.Set<UsersInfo>().AddAsync(users);
+        await DbContext.SaveChangesAsync();
+        return Ok(users.UserID);
+    }
+
+    [HttpDelete]
+    [Route("DeleteAllUsers")]
+    [AllowAnonymous]
+    public async Task<ActionResult> Delete()
+    {
+        var ExistingUsers = await DbContext.Users.ToListAsync();
+        DbContext.Set<UsersInfo>().RemoveRange(ExistingUsers);
+        await DbContext.SaveChangesAsync();
+        return Ok("Done!");
+    }
+
+    [HttpPost]
+    [Route("RefreshToken")]
+    [Authorize]
+    public async Task<ActionResult> RefreshToken(UploadToken token)
+    {
+        var ExistingUserID = await DbContext.Users.SingleOrDefaultAsync(op => op.UserID == token.UserID);
+        if (ExistingUserID == null)
+        {
+            return StatusCode(404,$"ID: `{token.UserID}` is Not Exist");
+        }
+        logger.LogError("This Token is not exist");
+        var ExistingToken = await DbContext.Token.SingleOrDefaultAsync(op => op.AccessToken == token.AccessToken);
+        if (ExistingToken == null)
+            return NotFound("Token is Not Exist");
+        await DbContext.Token.AddAsync(token);
+        await DbContext.SaveChangesAsync();
+        return Ok("Done!");
+    }
+
+    [HttpGet]
+    [Route("{ID}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> GetUser(int id)
+    {
+        var ExistingUser = await DbContext.Users.FindAsync( id);
+        if (ExistingUser is null)
+        {
+            return NotFound($"User with ID : `{id}` is Not Exist");
+        }
+        logger.LogWarning("Task is not exist");
+        return Ok(ExistingUser);
+    }
+
+    [HttpPost]
+    [Route("ChangePassword")]
+    [Authorize]
+    public async Task<ActionResult> ChangePassword([FromHeader]ChangePasswordRequest request)
+    {
+        var ExistingUsers = await DbContext.Users.SingleOrDefaultAsync(op => op.UserID == request.UserID);
+        if (ExistingUsers == null )
+            return BadRequest("Password Or UserName is Invalid");
+
+        if (request.NewPassword.Length < 12)
+            return BadRequest("Password Must be More than 12 characters");
+
+        if (!BCrypt.Net.BCrypt.Verify(ExistingUsers.Password, request.OldPassword))
+            return StatusCode(404, "Old Password is not valid");
+
+        DbContext.Users.Update(ExistingUsers); 
+        await DbContext.SaveChangesAsync();
+        return Ok("Done!");
+    }
+
+    [HttpDelete]
+    [Route("DeleteAllTasks")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<IEnumerable<TaskInfo>>> DeleteAll()
+    {
+        var ExistingTask = await DbContext.Task.ToListAsync();
+        DbContext.Set<TaskInfo>().RemoveRange(ExistingTask);
+        await DbContext.SaveChangesAsync();
+        return Ok("Done!");
+    }
+
+    [HttpPost]
+    [Route("CreateTask")]
+    [Authorize]
+    public async Task<ActionResult<int>> CreateTask( TaskInfo task)
+    {
+        var Existing = await DbContext.Task.FindAsync(task.TaskID);
+        if (Existing != null)
+            return BadRequest($"Task with id : `{task.TaskID}` already Exist");
+        await DbContext.Set<TaskInfo>().AddAsync(task);
+        await DbContext.SaveChangesAsync();
+        return Ok(task.TaskID);
+    }
+
+    [HttpGet]
+    [Route("Todo")]
+    public async Task<ActionResult<IEnumerable<TaskInfo>>> GetAll()
+    {
+        var Existing = await DbContext.Task.ToListAsync();
+        return Ok(Existing);
+    }  
+
+
+    [HttpGet]
+    [Route("GetTask/{id}")]
+    public async Task<ActionResult<int>> GetByID(int ID )
+    {
+        var Existing = await DbContext.Task.FindAsync(ID);
+        if (Existing == null)
+            return BadRequest($"Task with id : `{ID}` already Exist");
+        return Ok(Existing);
+    }
+
+    [HttpPut]
+    [Route("Todo/Check/{id}")]
+    public async Task<ActionResult> CheckData(int id, TaskInfo task)
+    {
+        var ExistingTask = await DbContext.Task.FindAsync(id);
+        if (ExistingTask == null)
+        {
+            return NotFound("this Task is Not Exist");
+        }
+        ExistingTask.Status = task.Status;
+        ExistingTask.Title = task.Title;
+        ExistingTask.Description = task.Description;
+        ExistingTask.CreatedAt = task.CreatedAt;
+
+        DbContext.Set<TaskInfo>().Update(ExistingTask);
+        await DbContext.SaveChangesAsync();
+        return Ok("Done!");
+    }
+}
