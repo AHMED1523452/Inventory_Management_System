@@ -27,7 +27,9 @@ public class SigningUpController(IOptions<JwtOptions> jwt, ILogger<SigningUpCont
             Subject = new ClaimsIdentity(new Claim[]    //. will carrying the info of Users 
             {
                new(ClaimTypes.Name, request.UserName),
-               new(ClaimTypes.NameIdentifier, ExistingUser.UserID.ToString() )
+               new(ClaimTypes.NameIdentifier, ExistingUser.UserID.ToString() ),
+               new(ClaimTypes.Role, "User"),
+               new Claim(ClaimTypes.Role, "Admin")
             }),
             Expires = DateTime.UtcNow.AddMinutes(15)
         };
@@ -252,4 +254,4 @@ public class CategoryController : ControllerBase
         await DbContext.SaveChangesAsync();
         return Ok(ExistingCategory);
     }
-}
+    
