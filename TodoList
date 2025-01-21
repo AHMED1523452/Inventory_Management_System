@@ -60,17 +60,7 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
         return Ok(users.UserID);
     }
 
-    [HttpDelete]
-    [Route("DeleteAllUsers")]
-    [AllowAnonymous]
-    public async Task<ActionResult> Delete()
-    {
-        var ExistingUsers = await DbContext.Users.ToListAsync();
-        DbContext.Set<UsersInfo>().RemoveRange(ExistingUsers);
-        await DbContext.SaveChangesAsync();
-        return Ok("Done!");
-    }
-
+    
     [HttpPost]
     [Route("RefreshToken")]
     [Authorize]
@@ -159,6 +149,8 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
 
     [HttpGet]
     [Route("GetTask/{id}")]
+    [Authorize(Roles = "User")]
+    [Aut]
     public async Task<ActionResult<int>> GetByID(int ID )
     {
         var Existing = await DbContext.Task.FindAsync(ID);
