@@ -17,32 +17,36 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
         {
             return BadRequest("UserName or Password required");
         }
-        var ExitingUsers = await DbContext.Users.SingleOrDefaultAsync(op => op.UserName == request.UserName && op.Password == request.Password);
-        if (ExitingUsers == null)
+        var ExitingUsers = await DbContext.Users.SingleOrDefaultAsync(op => op.UserName == request.UserName);
+        if (ExitingUsers == null || !BCrypt.Net.BCrypt.Verify(ExitingUsers.Password,request.Password))
             return Unauthorized("This data is not Exit");
         var tokenHandler = new JwtSecurityTokenHandler();
         var tokenDescriptor = new SecurityTokenDescriptor()
         {
+
+            Issuer = Jwt.Value.Issuer,
+            Audience = Jwt.Value.Audience,
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Jwt.Value.SigningKey)), SecurityAlgorithms.HmacSha256),
             Subject = new ClaimsIdentity(new Claim[] //.  this claim will carry info from the Users
             {
                 new Claim(ClaimTypes.Name, request.UserName),
             }),
-            Issuer = Jwt.Value.Issuer,
-            Audience = Jwt.Value.Audience,
-            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Jwt.Value.SigningKey)), SecurityAlgorithms.HmacSha256)
+            Expires = DateTime.Now.AddMinutes(15)
         };
         var SecurityToken = tokenHandler.CreateToken(tokenDescriptor);
         var accessToken = tokenHandler.WriteToken(SecurityToken);//. Will arrive the Token and will put it in DataBase Called Upload Token 
         var ExpirationDate = DateTime.UtcNow.AddDays(30); //. will add to the DateTime the Life Time that Exists in Json File
-        if (ExpirationDate > DateTime.MaxValue) //. Check if the Datatype arrived to the max Value or not
+
+        if (ExpirationDate > DateTime.UtcNow) //. Check if the Datatype arrived to the max Value or not
             return BadRequest("The Date Is More Than the MaxValue of DateTime");
+
         var token = new UploadToken() //. i did it due to i can't put it in Table The Access Token Direct
         {
             UserID = ExitingUsers.UserID,
-            AccessToken = accessToken,
+            AccessToken = BCrypt.Net.BCrypt.HashString(accessToken),
             ExpirationDate = ExpirationDate
         };
-        var ExistingToken = await DbContext.Token.AddAsync(token);
+        await DbContext.Token.AddAsync(token);
         await DbContext.SaveChangesAsync();
         return Ok($"Access Token :`{accessToken}`");
     }
@@ -53,9 +57,10 @@ public class TodoList(IOptions<JwtOptions> jwt, ApplicationDbContext dbContext, 
     [AllowAnonymous]
     public async Task<ActionResult<int>> SignUp(UsersInfo users)
     {
-        var ExistingUser = await DbContext.Users.SingleOrDefaultAsync(op => op.UserName == users.UserName && op.Password == op.Password);
+        var ExistingUser = await DbContext.Users.SingleOrDefaultAsync(op => op.UserName == users.UserName);
         if (ExistingUser != null)
             return BadRequest("data already Exist");
+        users.Password = BCrypt.Net.BCrypt.HashPassword(users.Password);
         await DbContext.Set<UsersInfo>().AddAsync(users);
         await DbContext.SaveChangesAsync();
         return Ok(users.UserID);
