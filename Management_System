@@ -29,7 +29,9 @@ public class SigningUpController(IOptions<JwtOptions> jwt, ILogger<SigningUpCont
                new(ClaimTypes.Name, request.UserName),
                new(ClaimTypes.NameIdentifier, ExistingUser.UserID.ToString() ),
                new(ClaimTypes.Role, "User"),
-               new Claim(ClaimTypes.Role, "Admin")
+               new (ClaimTypes.Role, "Admin"),
+               new("UserType", "Employee"),
+               new("DateOfBirth", "1970-01-01")
             }),
             Expires = DateTime.UtcNow.AddMinutes(15)
         };
@@ -38,10 +40,11 @@ public class SigningUpController(IOptions<JwtOptions> jwt, ILogger<SigningUpCont
         var expirationDate = DateTime.UtcNow.AddDays(30);
         var attribute = new AccessTokenTable
         {
-            AccessToken = accessToken,
+            AccessToken = BCrypt.Net.BCrypt.HashString(accessToken ),
             ExpirationDate = expirationDate
         };
         await Context.access.AddAsync(attribute);
+        await Context.SaveChangesAsync();
         if (expirationDate > DateTime.UtcNow) //. this condition will be continue for Date of Expiration Date (30 days)
             return Ok($"AccessToken : `{attribute.AccessToken}`,RefreshToken : `{attribute.RefreshToken}` ");
         else
@@ -66,7 +69,8 @@ public class SigningUpController(IOptions<JwtOptions> jwt, ILogger<SigningUpCont
 
     [HttpGet]
     [Route("GettingProfileUsingPassword")]
-    [Authorize]
+    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "AgeGreaterThan25")]
     public async Task<ActionResult> GettingProfile(AuthenticationRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.UserName) || string.IsNullOrWhiteSpace(request.Password))
@@ -112,6 +116,7 @@ public class ProductsController( ILogger<ProductsController> logger, Application
     [HttpGet]
     [Route("GetProduct/{id}")]
     [Authorize(Roles = "User")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<int>> GetByID(int id) //.any API has parameter so has model binding 
     {
         var user = User.Identity.Name;//. getting User Name
@@ -128,7 +133,7 @@ public class ProductsController( ILogger<ProductsController> logger, Application
 
     [HttpGet]
     [Route("GetAllProducts")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "SuperUserOnly")]
     public async Task<ActionResult<IEnumerable<Products>>> GetAll()
     {
         var ExistingProducts = await context.Set<Products>().ToListAsync();
